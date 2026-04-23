@@ -17,13 +17,15 @@ jobs:
             target: mvebu
             subtarget: cortexa9
             vermagic: "27e1322291d198b059e40717a0aca6fb"
-            turris_branch: "v24.10" # Ветка TurrisOS на базе OpenWrt 24.10        
+            # Указываем правильную ветку для TurrisOS 9.x
+            turris_branch: "openwrt-24.10" 
 
     steps:
       - uses: actions/checkout@v4
         with:
-          repository: turris/openwrt  # Используем исходники Turris
-          ref: ${{ matrix.build_env.turris_branch }} # Указываем ветку v24.10
+          # Исправленное имя организации: turris-cz
+          repository: turris-cz/openwrt 
+          ref: ${{ matrix.build_env.turris_branch }}
           fetch-depth: 0
 
       - name: Cache Tools and Kernel
