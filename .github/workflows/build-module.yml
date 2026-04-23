@@ -12,17 +12,18 @@ jobs:
     strategy:
       matrix:
         build_env:
-          - tag: "24.10.6"
+          - tag: "24.10"
             pkgarch: arm_cortex-a9_vfpv3-d16
             target: mvebu
             subtarget: cortexa9
-            vermagic: "27e1322291d198b059e40717a0aca6fb"        
+            vermagic: "27e1322291d198b059e40717a0aca6fb"
+            turris_branch: "v24.10" # Ветка TurrisOS на базе OpenWrt 24.10        
 
     steps:
       - uses: actions/checkout@v4
         with:
-          repository: openwrt/openwrt
-          ref: v${{ matrix.build_env.tag }}
+          repository: turris/openwrt  # Используем исходники Turris
+          ref: ${{ matrix.build_env.turris_branch }} # Указываем ветку v24.10
           fetch-depth: 0
 
       - name: Cache Tools and Kernel
