@@ -41,60 +41,40 @@ jobs:
 
       - name: Building kernel and tools
         run: |
-          echo "pkgarch: ${{ matrix.build_env.pkgarch}}, target:${{ matrix.build_env.target}}, subtarget: ${{ matrix.build_env.subtarget}}"
+          # 1. Установка системных зависимостей для Turris
+          sudo apt update
+          sudo apt install -y ca-certificates git build-essential zlib1g-dev gawk libssl-dev \
+            subversion unzip libncurses-dev wget python3 file rsync gcc-multilib \
+            g++-multilib libc6-dev-i386 protobuf-c-compiler which libyaml-dev
 
-          # 1. Исправленная работа с фидами
-          # Если feeds.conf.default нет, создаем feeds.conf с нуля или используем существующий
-          if [ -f feeds.conf.default ]; then
-            cp feeds.conf.default feeds.conf
-          elif [ ! -f feeds.conf ]; then
-            touch feeds.conf
-          fi
-          
+          # 2. Подготовка дерева исходников Turris OS для Omnia
+          chmod +x compile_pkgs
+          ./compile_pkgs prepare -t omnia
+
+          # После выполнения prepare скрипты OpenWrt (scripts/feeds и т.д.) появятся в текущей папке
+          # 3. Добавление AmneziaWG
           echo "src-git awgopenwrt https://github.com/yury-sannikov/awg-openwrt.git" >> ./feeds.conf
-          ./scripts/feeds update && ./scripts/feeds install -a
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
 
-          # 2. Настройка конфигурации для Turris Omnia
-          # Вместо make defconfig используем специфический конфиг для mvebu, если он есть
-          if [ -f target/linux/${{ matrix.build_env.target }}/config-6.6 ]; then
-            cp target/linux/${{ matrix.build_env.target }}/config-6.6 .config
-          fi
-          
-          # Добавляем параметры AmneziaWG
+          # 4. Конфигурация (используем стандартный механизм Turris)
+          make defconfig
           echo "CONFIG_PACKAGE_kmod-amneziawg=m" >> .config
           echo "CONFIG_PACKAGE_amneziawg-tools=y" >> .config
           echo "CONFIG_PACKAGE_luci-app-amneziawg=y" >> .config
           
-          # Принудительно включаем криптографию
+          # Зависимости криптографии
           echo "CONFIG_PACKAGE_kmod-crypto-lib-chacha20=m" >> .config
           echo "CONFIG_PACKAGE_kmod-crypto-lib-chacha20poly1305=m" >> .config
           echo "CONFIG_PACKAGE_kmod-crypto-chacha20poly1305=m" >> .config
-
-          # Обновляем конфиг
+          
           make defconfig
 
-          # 3. Компиляция
-          echo "    > make tools/install"
-          make tools/install -i -j `nproc`
-
-          echo "    > make toolchain/install"
-          make toolchain/install -i -j `nproc`
-
-          echo "    > make target/linux/compile"
-          make target/linux/compile -i -j `nproc` V=s
-
-          # 4. Проверка vermagic
-          if [ -f ./build_dir/target-*/linux-*/linux-*/.vermagic ]; then
-            VERMAGIC=`cat ./build_dir/target-*/linux-*/linux-*/.vermagic`
-            VERMAGIC_EXPECTED=${{ matrix.build_env.vermagic }}
-            echo "Real Vermagic: $VERMAGIC"
-            if [ "$VERMAGIC" != "$VERMAGIC_EXPECTED" ]; then
-              echo "Vermagic mismatch: $VERMAGIC, expected $VERMAGIC_EXPECTED"
-              # exit 1 # Раскомментируйте, когда будете уверены в хеше
-            fi
-          else
-            echo "Error: .vermagic file not found after compile"
-          fi
+          # 5. Сборка тулчейна и ядра (самый долгий этап)
+          make tools/install -i -j$(nproc)
+          make toolchain/install -i -j$(nproc)
+          make target/linux/compile -i -j$(nproc) V=s
+          
       - name: Build AmneziaWG
         run: |
           VERMAGIC=`cat ./build_dir/target-*/linux-*/linux-*/.vermagic`
