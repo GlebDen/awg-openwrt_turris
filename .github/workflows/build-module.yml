@@ -17,8 +17,8 @@ jobs:
             target: mvebu
             subtarget: cortexa9
             vermagic: "27e1322291d198b059e40717a0aca6fb"
-            # Указываем правильную ветку для TurrisOS 9.x
-            turris_branch: "openwrt-24.10" 
+            # Используем именно тот тег, который вы нашли
+            turris_ref: "v9.0.5" 
 
     steps:
       - uses: actions/checkout@v4
