@@ -20,11 +20,12 @@ jobs:
             turris_ref: "v9.0.5" 
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Turris OS Build Scripts
+        uses: actions/checkout@v4
         with:
-          # Исправленное имя организации: turris-cz
-          repository: turris-cz/openwrt 
-          ref: ${{ matrix.build_env.turris_branch }}
+          repository: turris-cz/os-build
+          ref: v9.0.5          # Тег, который мы нашли
+          path: .              # Явно указываем корень
           fetch-depth: 0
           submodules: recursive
 
@@ -41,48 +42,40 @@ jobs:
 
       - name: Building kernel and tools
         run: |
-          # 1. Установка системных зависимостей для Turris
+          # 1. Установка зависимостей (оставляем как было)
           sudo apt update
           sudo apt install -y ca-certificates git build-essential zlib1g-dev gawk libssl-dev \
             subversion unzip libncurses-dev wget python3 file rsync gcc-multilib \
             g++-multilib libc6-dev-i386 protobuf-c-compiler which libyaml-dev
 
-          # --- ВСТАВКА ДИАГНОСТИКИ И ПОИСКА ---
-          echo "Current directory: $(pwd)"
-          echo "Files in root:"
-          ls -F
+          # 2. Проверка скачанных файлов
+          echo "Checking directory structure..."
+          ls -la
           
-          # Пытаемся найти compile_pkgs. Если его нет в корне, ищем везде.
-          if [ -f "./compile_pkgs" ]; then
-            CP_PATH="./compile_pkgs"
-          else
-            echo "Searching for compile_pkgs..."
-            CP_PATH=$(find . -name "compile_pkgs" | head -n 1)
+          if [ ! -f "compile_pkgs" ]; then
+            echo "CRITICAL ERROR: compile_pkgs still not found!"
+            echo "Trying to emergency clone..."
+            git clone --depth 1 --branch v9.0.5 https://github.com/turris-cz/os-build.git temp_build
+            cp -r temp_build/* .
           fi
 
-          if [ -z "$CP_PATH" ]; then
-            echo "ERROR: compile_pkgs not found!"
-            ls -R
-            exit 1
-          fi
-
-          echo "Found compile_pkgs at: $CP_PATH"
-          chmod +x "$CP_PATH"
-          
-          # 2. Подготовка дерева исходников Turris OS для Omnia
-          # Выполняем из той папки, где лежит скрипт
-          cd $(dirname "$CP_PATH")
+          # 3. Подготовка Turris (Omnia)
+          chmod +x compile_pkgs
           ./compile_pkgs prepare -t omnia
-          # --- КОНЕЦ ВСТАВКИ ---
 
-          # 3. Добавление AmneziaWG
-          # После prepare мы находимся в корне дерева исходников
+          # После prepare структура OpenWrt появится в текущей папке
+          # 4. Добавление AmneziaWG
           echo "src-git awgopenwrt https://github.com/yury-sannikov/awg-openwrt.git" >> ./feeds.conf
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
           # 4. Конфигурация
           make defconfig
+          # Форсируем нужный vermagic
+          echo "CONFIG_KMOD_VERMAGIC=\"27e1322291d198b059e40717a0aca6fb\"" >> .config
+          # Также отключаем проверку хеша при сборке, чтобы ядро не сопротивлялось
+          echo "CONFIG_EXTERNAL_KERNEL_TREE=\"\"" >> .config
+          echo "CONFIG_KERNEL_GIT_CLONE_URI=\"\"" >> .config
           echo "CONFIG_PACKAGE_kmod-amneziawg=m" >> .config
           echo "CONFIG_PACKAGE_amneziawg-tools=y" >> .config
           echo "CONFIG_PACKAGE_luci-app-amneziawg=y" >> .config
@@ -98,6 +91,8 @@ jobs:
           make tools/install -i -j$(nproc)
           make toolchain/install -i -j$(nproc)
           make target/linux/compile -i -j$(nproc) V=s
+          echo "--- FINAL VERMAGIC CHECK ---"
+          cat ./build_dir/target-*/linux-*/linux-*/.vermagic || echo "Vermagic file not found"
           
       - name: Build AmneziaWG
         run: |
