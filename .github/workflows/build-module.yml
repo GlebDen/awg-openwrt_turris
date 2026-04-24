@@ -40,13 +40,25 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-build-vm4-cache-tools-kernel-${{ matrix.build_env.tag }}-${{ matrix.build_env.pkgarch}}-
 
-      - name: Building kernel and tools
+      - name: Install System Dependencies
         run: |
-          sudo apt update
-          sudo apt install -y ca-certificates git build-essential zlib1g-dev gawk libssl-dev \
+          sudo apt-get update -y
+          # Сначала ставим базовые утилиты, которые точно есть
+          sudo apt-get install -y apt-utils shellcheck
+          
+          # Установка всех нужных зависимостей одной командой.
+          # Если libcrypt-compat-dev не найден (на 24.04), ставим libcrypt-dev
+          sudo apt-get install -y \
+            ca-certificates git build-essential zlib1g-dev gawk libssl-dev \
             subversion unzip libncurses-dev wget python3 file rsync gcc-multilib \
-            g++-multilib libc6-dev-i386 protobuf-c-compiler which libyaml-dev \
-            libwayland-dev libxkbcommon-dev xkeyboard-config libcrypt-compat-dev
+            g++-multilib libc6-dev-i386 protobuf-c-compiler libyaml-dev \
+            libwayland-dev libxkbcommon-dev xkeyboard-config \
+            debianutils || sudo apt-get install -y libcrypt-dev
+
+          # Явно проверяем и доставляем 'which', если его всё еще нет
+          if ! command -v which &> /dev/null; then
+            sudo apt-get install -y which || echo "which is provided by debianutils"
+          fi
 
           # 2. Подготовка окружения Turris
           chmod +x compile_pkgs
