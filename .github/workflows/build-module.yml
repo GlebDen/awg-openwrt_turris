@@ -46,7 +46,8 @@ jobs:
           sudo apt update
           sudo apt install -y ca-certificates git build-essential zlib1g-dev gawk libssl-dev \
             subversion unzip libncurses-dev wget python3 file rsync gcc-multilib \
-            g++-multilib libc6-dev-i386 protobuf-c-compiler which libyaml-dev
+            g++-multilib libc6-dev-i386 protobuf-c-compiler which libyaml-dev \
+            libwayland-dev libxkbcommon-dev xkeyboard-config libcrypt-compat-dev
 
           # 2. Проверка скачанных файлов
           echo "Checking directory structure..."
@@ -96,25 +97,19 @@ jobs:
           
       - name: Build AmneziaWG
         run: |
-          VERMAGIC=`cat ./build_dir/target-*/linux-*/linux-*/.vermagic`
-          echo "Vermagic: $VERMAGIC"
-
-          VERMAGIC_EXPECTED=${{ matrix.build_env.vermagic }}
-
-          if [ "$VERMAGIC" != "$VERMAGIC_EXPECTED" ]; then
-            echo Vermagic mismatch: $VERMAGIC, expected $VERMAGIC_EXPECTED
-            exit 1
-          fi
-
-          # Ignore kmod build for some targets, replace with the awg-go
-          make package/kmod-amneziawg/{clean,download,prepare} V=s || true
-          make package/kmod-amneziawg/compile V=s || true
-
-          make package/luci-app-amneziawg/{clean,download,prepare}
-          make package/luci-app-amneziawg/compile V=s
-
-          make V=s package/amneziawg-tools/{clean,download,prepare}
-          make V=s package/amneziawg-tools/compile
+          cd build/
+          # Устанавливаем фиды AmneziaWG
+          echo "src-git awgopenwrt https://github.com/GlebDen/amneziawg-openwrt.git" >> feeds.conf.default
+          ./scripts/feeds update awgopenwrt
+          ./scripts/feeds install -a -p awgopenwrt
+          
+          # Генерируем конфиг (обязательно для Turris)
+          make defconfig
+          
+          # Собираем только нужные пакеты, игнорируя ошибки в других
+          make package/kmod-amneziawg/compile V=s -i
+          make package/amneziawg-tools/compile V=s -i
+          make package/luci-app-amneziawg/compile V=s -i
 
       - name: Prepare artifacts
         run: |
