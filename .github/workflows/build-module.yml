@@ -42,13 +42,11 @@ jobs:
 
       - name: Building kernel and tools
         run: |
-          # 1. Исправляем репозитории и пакеты для Ubuntu 24.04
-          sudo add-apt-repository universe -y
           sudo apt update
           sudo apt install -y ca-certificates git build-essential zlib1g-dev gawk libssl-dev \
             subversion unzip libncurses-dev wget python3 file rsync gcc-multilib \
             g++-multilib libc6-dev-i386 protobuf-c-compiler which libyaml-dev \
-            libwayland-dev libxkbcommon-dev xkeyboard-config libcrypt-dev
+            libwayland-dev libxkbcommon-dev xkeyboard-config libcrypt-compat-dev
 
           # 2. Подготовка окружения Turris
           chmod +x compile_pkgs
