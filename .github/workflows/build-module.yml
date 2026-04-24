@@ -17,7 +17,6 @@ jobs:
             target: mvebu
             subtarget: cortexa9
             vermagic: "27e1322291d198b059e40717a0aca6fb"
-            # Используем именно тот тег, который вы нашли
             turris_ref: "v9.0.5" 
 
     steps:
@@ -27,6 +26,7 @@ jobs:
           repository: turris-cz/openwrt 
           ref: ${{ matrix.build_env.turris_branch }}
           fetch-depth: 0
+          submodules: recursive
 
       - name: Cache Tools and Kernel
         id: cache-tools-kernel
@@ -47,17 +47,41 @@ jobs:
             subversion unzip libncurses-dev wget python3 file rsync gcc-multilib \
             g++-multilib libc6-dev-i386 protobuf-c-compiler which libyaml-dev
 
-          # 2. Подготовка дерева исходников Turris OS для Omnia
-          chmod +x compile_pkgs
-          ./compile_pkgs prepare -t omnia
+          # --- ВСТАВКА ДИАГНОСТИКИ И ПОИСКА ---
+          echo "Current directory: $(pwd)"
+          echo "Files in root:"
+          ls -F
+          
+          # Пытаемся найти compile_pkgs. Если его нет в корне, ищем везде.
+          if [ -f "./compile_pkgs" ]; then
+            CP_PATH="./compile_pkgs"
+          else
+            echo "Searching for compile_pkgs..."
+            CP_PATH=$(find . -name "compile_pkgs" | head -n 1)
+          fi
 
-          # После выполнения prepare скрипты OpenWrt (scripts/feeds и т.д.) появятся в текущей папке
+          if [ -z "$CP_PATH" ]; then
+            echo "ERROR: compile_pkgs not found!"
+            ls -R
+            exit 1
+          fi
+
+          echo "Found compile_pkgs at: $CP_PATH"
+          chmod +x "$CP_PATH"
+          
+          # 2. Подготовка дерева исходников Turris OS для Omnia
+          # Выполняем из той папки, где лежит скрипт
+          cd $(dirname "$CP_PATH")
+          ./compile_pkgs prepare -t omnia
+          # --- КОНЕЦ ВСТАВКИ ---
+
           # 3. Добавление AmneziaWG
+          # После prepare мы находимся в корне дерева исходников
           echo "src-git awgopenwrt https://github.com/yury-sannikov/awg-openwrt.git" >> ./feeds.conf
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-          # 4. Конфигурация (используем стандартный механизм Turris)
+          # 4. Конфигурация
           make defconfig
           echo "CONFIG_PACKAGE_kmod-amneziawg=m" >> .config
           echo "CONFIG_PACKAGE_amneziawg-tools=y" >> .config
@@ -70,7 +94,7 @@ jobs:
           
           make defconfig
 
-          # 5. Сборка тулчейна и ядра (самый долгий этап)
+          # 5. Сборка (самый долгий этап)
           make tools/install -i -j$(nproc)
           make toolchain/install -i -j$(nproc)
           make target/linux/compile -i -j$(nproc) V=s
