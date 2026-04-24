@@ -42,13 +42,18 @@ jobs:
 
       - name: Building kernel and tools
         run: |
-          # 1. Установка зависимостей (оставляем как было)
+          # 1. Добавляем репозитории и обновляем списки
+          sudo add-apt-repository universe -y
           sudo apt update
+
+          # 2. Установка зависимостей с учетом особенностей Ubuntu 24.04
+          # Если libcrypt-compat-dev не найден, пробуем libcrypt-dev
           sudo apt install -y ca-certificates git build-essential zlib1g-dev gawk libssl-dev \
             subversion unzip libncurses-dev wget python3 file rsync gcc-multilib \
             g++-multilib libc6-dev-i386 protobuf-c-compiler which libyaml-dev \
-            libwayland-dev libxkbcommon-dev xkeyboard-config libcrypt-compat-dev
-
+            libwayland-dev libxkbcommon-dev xkeyboard-config || \
+            sudo apt install -y libcrypt-dev # Запасной вариант для новых систем
+            
           # 2. Проверка скачанных файлов
           echo "Checking directory structure..."
           ls -la
