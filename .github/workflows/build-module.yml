@@ -101,25 +101,32 @@ jobs:
         run: |
           cd build/
           
-          # 1. Подготовка фидов (убеждаемся, что всё на месте)
+          # 1. Обновляем и ставим фиды
           ./scripts/feeds update -a
           ./scripts/feeds install -a
           
-          # 2. Базовая конфигурация
+          # 2. Генерируем полный .config системы
           make defconfig
           
-          # 3. КРИТИЧЕСКИЙ ШАГ: Подготовка ядра
-          # Это создаст необходимые символические ссылки и тот самый .config ядра
-          make target/linux/prepare -j$(nproc)
+          # 3. ПОДГОТОВКА ЯДРА С ЯВНЫМ УКАЗАНИЕМ ЦЕЛИ
+          # Для Turris Omnia это target/linux/{mvebu}/prepare
+          # Это создаст тот самый .config в build_dir/target-.../linux-mvebu_cortexa9/linux-6.6.129/
+          make target/linux/prepare V=s -j$(nproc)
           
-          # 4. Сборка тулчейна (если не восстановился из кэша)
+          # Дополнительная проверка: если .config ядра все еще нет, 
+          # принудительно вызываем стадию конфигурации ядра
+          make target/linux/configure V=s
+          
+          # 4. Сборка тулчейна (пропускаем ошибки через -i)
           make tools/install -i -j$(nproc)
           make toolchain/install -i -j$(nproc)
 
-          # 5. Теперь собираем модуль
-          # Используем IGNORE_ERRORS=1, чтобы билд не падал на второстепенных пакетах
-          make package/kmod-amneziawg/compile V=s
+          # 5. Установка Vermagic (важно сделать это ПЕРЕД компиляцией модуля)
+          sed -i 's/CONFIG_KMOD_VERMAGIC=.*/CONFIG_KMOD_VERMAGIC="27e1322291d198b059e40717a0aca6fb"/' .config
 
+          # 6. Сборка самого модуля AmneziaWG
+          # Добавляем IGNORE_ERRORS=1, чтобы не падать на ошибках gpio-button-hotplug
+          make package/kmod-amneziawg/compile V=s IGNORE_ERRORS=1
       - name: Prepare artifacts
         run: |
           tag_name=${{  github.ref_name }}
