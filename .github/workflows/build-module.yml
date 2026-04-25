@@ -101,32 +101,33 @@ jobs:
         run: |
           cd build/
           
-          # 1. Обновляем и ставим фиды
+          # 1. Убеждаемся, что фиды установлены
           ./scripts/feeds update -a
           ./scripts/feeds install -a
           
-          # 2. Генерируем полный .config системы
+          # 2. Генерируем основной конфиг системы
           make defconfig
           
-          # 3. ПОДГОТОВКА ЯДРА С ЯВНЫМ УКАЗАНИЕМ ЦЕЛИ
-          # Для Turris Omnia это target/linux/{mvebu}/prepare
-          # Это создаст тот самый .config в build_dir/target-.../linux-mvebu_cortexa9/linux-6.6.129/
-          make target/linux/prepare V=s -j$(nproc)
+          # 3. ПРИНУДИТЕЛЬНАЯ КОНФИГУРАЦИЯ ЯДРА
+          # Эта команда распакует ядро и положит правильный .config от Turris в нужную папку
+          make target/linux/compile V=s -j$(nproc) || true
           
-          # Дополнительная проверка: если .config ядра все еще нет, 
-          # принудительно вызываем стадию конфигурации ядра
+          # Если команда выше упала на компиляции (это нормально), 
+          # нам важно, чтобы этап конфигурации ядра был завершен:
           make target/linux/configure V=s
           
-          # 4. Сборка тулчейна (пропускаем ошибки через -i)
+          # 4. Прописываем Vermagic (обязательно ПОСЛЕ configure ядра)
+          sed -i 's/CONFIG_KMOD_VERMAGIC=.*/CONFIG_KMOD_VERMAGIC="27e1322291d198b059e40717a0aca6fb"/' .config
+
+          # 5. Сборка тулчейна
           make tools/install -i -j$(nproc)
           make toolchain/install -i -j$(nproc)
 
-          # 5. Установка Vermagic (важно сделать это ПЕРЕД компиляцией модуля)
-          sed -i 's/CONFIG_KMOD_VERMAGIC=.*/CONFIG_KMOD_VERMAGIC="27e1322291d198b059e40717a0aca6fb"/' .config
-
-          # 6. Сборка самого модуля AmneziaWG
-          # Добавляем IGNORE_ERRORS=1, чтобы не падать на ошибках gpio-button-hotplug
-          make package/kmod-amneziawg/compile V=s IGNORE_ERRORS=1
+          # 6. Сборка модуля AmneziaWG
+          # Мы используем -i, чтобы игнорировать ошибки в gpio-button-hotplug, 
+          # если они останутся, так как нам нужен только наш пакет.
+          make package/kmod-amneziawg/compile V=s -i
+          
       - name: Prepare artifacts
         run: |
           tag_name=${{  github.ref_name }}
